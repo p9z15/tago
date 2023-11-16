@@ -24,7 +24,7 @@ type Tago struct {
 	LatestTag                         *semver.SemVer
 	Repository                        *git.Repository
 	Message, Remote                   string
-	Prefix, Major, Minor, Patch, Push bool
+	Prefix, Major, Minor, Patch, Push, Current bool
 }
 
 var (
@@ -39,9 +39,20 @@ var (
 
 			g.parseFlags(cmd.Flags())
 			g.IsRepository()
-			g.GetTags()
 
-			if !g.Repository.HasUncommitedChanges() {
+			latestTag := g.GetTags(g.Current)
+
+			if g.Current {
+				if g.Repository.Clean() && g.StandingAtLatest(latestTag) {
+					ui.SuccessMsg(latestTag)
+					os.Exit(0)
+				} else {
+					ui.InfoMsg("v0.0.0")
+					os.Exit(1)
+				}
+			}
+
+			if !g.Repository.Clean() {
 				if !ui.PromptYN("You have uncommited changes. Do you want to continue with tagging the latest commit?") {
 					os.Exit(0)
 				}
@@ -111,6 +122,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("major", "x", false, "bump major version part")
 	rootCmd.PersistentFlags().BoolP("minor", "y", false, "bump minor version part")
 	rootCmd.PersistentFlags().BoolP("patch", "z", false, "bump patch version part")
+	rootCmd.PersistentFlags().BoolP("current", "c", false, "print latest tag if it is standing at head")
 
 	viper.SetDefault("remote", "origin")
 }
@@ -134,6 +146,11 @@ func (t *Tago) parseFlags(flags *pflag.FlagSet) {
 	}
 
 	t.Message, err = flags.GetString("msg")
+	if err != nil {
+		fmt.Println(fmt.Errorf("%s: %w", "msg", errParseError))
+	}
+
+	t.Current, err = flags.GetBool("current")
 	if err != nil {
 		fmt.Println(fmt.Errorf("%s: %w", "msg", errParseError))
 	}
@@ -165,12 +182,11 @@ func (t *Tago) IsRepository() {
 	t.Repository, err = git.NewRepository(dir)
 	if err != nil {
 		ui.ErrorMsg(err, "can not open repository. Exiting", dir)
-
 	}
 }
 
 // GetTags collects all existing tags
-func (t *Tago) GetTags() {
+func (t *Tago) GetTags(mute bool) string {
 	tags := t.Repository.GetTags()
 	if len(tags) == 0 {
 		ui.WarningMsg(nil, "no tags found")
@@ -217,10 +233,13 @@ func (t *Tago) GetTags() {
 		semVers = append(semVers, v)
 	}
 
-	ui.InfoMsg("found %s valid semVer tags. Invalid: %s tags", strconv.Itoa(len(semVers)), strconv.Itoa(invalid))
-
 	t.LatestTag = semver.HighestSemVer(semVers)
+
+	if !mute {
+	ui.InfoMsg("found %s valid semVer tags. Invalid: %s tags", strconv.Itoa(len(semVers)), strconv.Itoa(invalid))
 	ui.SuccessMsg("latest SemVer tag: %s", t.LatestTag.String)
+}
+	return t.LatestTag.String
 }
 
 func (t *Tago) prompt() string {
@@ -242,4 +261,48 @@ func (t *Tago) prompt() string {
 	}
 
 	return ""
+}
+
+func (t *Tago) getHeadCommit() string {
+
+	r := t.Repository
+	repo := r.Repository
+
+	ref, err := repo.Head()
+	if err != nil {
+		ui.ErrorMsg(nil, err.Error())
+	}
+
+	commit, err := repo.CommitObject(ref.Hash())
+	if err != nil {
+		ui.ErrorMsg(nil, err.Error())
+	}
+
+	return commit.Hash.String()
+}
+
+func (t *Tago) getTagCommit(tagName string) string {
+
+	r := t.Repository
+	repo := r.Repository
+
+	ref, err := repo.Tag(tagName)
+	if err != nil {
+		ui.ErrorMsg(nil, err.Error())
+	}
+
+	commit, err := repo.CommitObject(ref.Hash())
+	if err != nil {
+		ui.ErrorMsg(nil, err.Error())
+	}
+
+	return commit.Hash.String()
+}
+
+func (t *Tago) StandingAtLatest(tagName string) bool {
+
+	head := t.getHeadCommit()
+	tagCommit := t.getTagCommit(tagName)
+
+	return head == tagCommit
 }
