@@ -43,6 +43,7 @@ Usage:
   tago [flags]
 
 Flags:
+  -c, --current         print latest tag if it is standing at head
   -h, --help            help for tago
   -x, --major           bump major version part
   -y, --minor           bump minor version part

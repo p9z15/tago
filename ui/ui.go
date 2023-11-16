@@ -88,6 +88,7 @@ func PromptList(msg, def string, options []string) int {
 		Message: msg,
 		Options: options,
 		Default: def,
+		VimMode: true,
 	}
 
 	err := survey.AskOne(prompt, &result, survey.WithPageSize(pageSize))
