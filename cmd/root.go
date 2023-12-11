@@ -21,9 +21,9 @@ const (
 
 // Tago project struct
 type Tago struct {
-	LatestTag                         *semver.SemVer
-	Repository                        *git.Repository
-	Message, Remote                   string
+	LatestTag                                  *semver.SemVer
+	Repository                                 *git.Repository
+	Message, Remote                            string
 	Prefix, Major, Minor, Patch, Push, Current bool
 }
 
@@ -188,7 +188,7 @@ func (t *Tago) IsRepository() {
 // GetTags collects all existing tags
 func (t *Tago) GetTags(mute bool) string {
 	tags := t.Repository.GetTags()
-	if len(tags) == 0 {
+	if len(tags) == 0 && !mute {
 		ui.WarningMsg(nil, "no tags found")
 		newTag, err := ui.PromptMsg("new tag (e.g: v0.1.0):")
 		if err != nil {
@@ -219,6 +219,9 @@ func (t *Tago) GetTags(mute bool) string {
 
 		ui.SuccessMsg("successfully added tag: %s", newTag)
 		os.Exit(0)
+	} else if len(tags) == 0 && mute {
+		ui.InfoMsg("v0.0.0")
+		os.Exit(1)
 	}
 
 	semVers := []*semver.SemVer{}
@@ -236,9 +239,9 @@ func (t *Tago) GetTags(mute bool) string {
 	t.LatestTag = semver.HighestSemVer(semVers)
 
 	if !mute {
-	ui.InfoMsg("found %s valid semVer tags. Invalid: %s tags", strconv.Itoa(len(semVers)), strconv.Itoa(invalid))
-	ui.SuccessMsg("latest SemVer tag: %s", t.LatestTag.String)
-}
+		ui.InfoMsg("found %s valid semVer tags. Invalid: %s tags", strconv.Itoa(len(semVers)), strconv.Itoa(invalid))
+		ui.SuccessMsg("latest SemVer tag: %s", t.LatestTag.String)
+	}
 	return t.LatestTag.String
 }
 
